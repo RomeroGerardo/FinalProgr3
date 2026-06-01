@@ -11,7 +11,7 @@ const db = require("../db");
 const alumnoRepository = require("../repositories/alumnoRepository");
 
 describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
-  
+
   beforeEach(() => {
     // Limpiar todas las llamadas simuladas antes de cada prueba
     jest.clearAllMocks();
@@ -42,5 +42,24 @@ describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
     expect(db.query).toHaveBeenCalledTimes(1);
     expect(db.query.mock.calls[0][0]).toContain("INSERT INTO alumnos");
     expect(db.query.mock.calls[0][1]).toEqual([nombreEjemplo, emailEjemplo]);
+  });
+
+  // Prueba 2: Obtener Alumnos Exitosamente
+  test("Prueba 2: alumnoRepository.obtenerAlumnos debe retornar la lista completa de alumnos de la base de datos", async () => {
+    const listaAlumnosSimulada = [
+      { id: 1, nombre: "Naomi Soria", email: "naomi.soria2024@gmail.com" },
+      { id: 2, nombre: "Lucas Ramírez", email: "lucas.ramirez@edugestor.com" }
+    ];
+
+    db.query.mockImplementation((sql, callback) => {
+      const cb = typeof sql === "function" ? sql : callback;
+      cb(null, listaAlumnosSimulada);
+    });
+
+    const alumnos = await alumnoRepository.obtenerAlumnos();
+
+    expect(alumnos).toEqual(listaAlumnosSimulada);
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toContain("SELECT * FROM alumnos");
   });
 });
