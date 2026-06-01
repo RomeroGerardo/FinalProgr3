@@ -11,6 +11,7 @@ const db = require("../db");
 const alumnoRepository = require("../repositories/alumnoRepository");
 const cursoRepository = require("../repositories/cursoRepository");
 const profesorRepository = require("../repositories/profesorRepository");
+const inscripcionRepository = require("../repositories/inscripcionRepository");
 
 describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
 
@@ -111,5 +112,29 @@ describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
     expect(db.query).toHaveBeenCalledTimes(1);
     expect(db.query.mock.calls[0][0]).toContain("INSERT INTO profesores");
     expect(db.query.mock.calls[0][1]).toEqual([nombreProfesor, emailProfesor]);
+  });
+
+  // Prueba 5: Registrar Inscripción Exitosamente
+  test("Prueba 5: inscripcionRepository.inscribirAlumno debe registrar la inscripción de un alumno en un curso", async () => {
+    const alumnoId = 1;
+    const cursoId = 102;
+    const resultadoSimulado = { insertId: 30 };
+
+    db.query.mockImplementation((sql, valores, callback) => {
+      const cb = typeof valores === "function" ? valores : callback;
+      cb(null, resultadoSimulado);
+    });
+
+    const inscripcionCreada = await inscripcionRepository.inscribirAlumno(alumnoId, cursoId);
+
+    expect(inscripcionCreada).toEqual({
+      id: 30,
+      alumno_id: alumnoId,
+      curso_id: cursoId
+    });
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toContain("INSERT INTO inscripciones");
+    expect(db.query.mock.calls[0][1]).toEqual([alumnoId, cursoId]);
   });
 });
