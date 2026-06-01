@@ -9,6 +9,7 @@ jest.mock("../db", () => {
 
 const db = require("../db");
 const alumnoRepository = require("../repositories/alumnoRepository");
+const cursoRepository = require("../repositories/cursoRepository");
 
 describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
 
@@ -61,5 +62,29 @@ describe("Pruebas Unitarias de Repositorios - EduGestor", () => {
     expect(alumnos).toEqual(listaAlumnosSimulada);
     expect(db.query).toHaveBeenCalledTimes(1);
     expect(db.query.mock.calls[0][0]).toContain("SELECT * FROM alumnos");
+  });
+
+  // Prueba 3: Crear Curso Exitosamente
+  test("Prueba 3: cursoRepository.crearCurso debe registrar un curso asociado a un profesor y retornar su ID", async () => {
+    const nombreCurso = "Ingeniería de Software con Node.js";
+    const profesorId = 2;
+    const resultadoSimulado = { insertId: 102 };
+
+    db.query.mockImplementation((sql, valores, callback) => {
+      const cb = typeof valores === "function" ? valores : callback;
+      cb(null, resultadoSimulado);
+    });
+
+    const cursoCreado = await cursoRepository.crearCurso(nombreCurso, profesorId);
+
+    expect(cursoCreado).toEqual({
+      id: 102,
+      nombre: nombreCurso,
+      profesor_id: profesorId
+    });
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toContain("INSERT INTO cursos");
+    expect(db.query.mock.calls[0][1]).toEqual([nombreCurso, profesorId]);
   });
 });
