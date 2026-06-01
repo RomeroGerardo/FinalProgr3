@@ -4,14 +4,18 @@
   "description": "Proyecto MVP desarrollado para la materia **Ingeniería de Software**, aplicando patrones de diseño y arquitectura (MVC, Repository, Singleton) y validado con pruebas en equipo.",
   "main": "db.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "start": "node server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "mysql2": "^3.22.3"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }
