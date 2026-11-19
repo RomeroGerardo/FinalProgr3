@@ -5,7 +5,8 @@
   "main": "db.js",
   "scripts": {
     "test": "jest",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed": "node db/seed.js"
   },
   "keywords": [],
   "author": "",
