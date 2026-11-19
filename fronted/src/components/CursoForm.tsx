@@ -5,11 +5,12 @@ import { Curso, Profesor } from '../types';
 interface CursoFormProps {
   curso?: Curso | null; // Null si es creación, Curso si es edición
   profesores: Profesor[];
+  profesorIdInicial?: number | null; // Preselección al crear desde la tarjeta de un profesor
   onSubmit: (datos: { nombre: string; profesor_id: number }) => void;
   onCancel: () => void;
 }
 
-export function CursoForm({ curso, profesores, onSubmit, onCancel }: CursoFormProps) {
+export function CursoForm({ curso, profesores, profesorIdInicial, onSubmit, onCancel }: CursoFormProps) {
   const [nombre, setNombre] = useState('');
   const [profesorId, setProfesorId] = useState<number>(0);
   const [error, setError] = useState('');
@@ -21,10 +22,11 @@ export function CursoForm({ curso, profesores, onSubmit, onCancel }: CursoFormPr
       setProfesorId(curso.profesor_id);
     } else {
       setNombre('');
-      setProfesorId(profesores.length > 0 ? profesores[0].id : 0);
+      const inicial = profesorIdInicial ?? (profesores.length > 0 ? profesores[0].id : 0);
+      setProfesorId(inicial);
     }
     setError('');
-  }, [curso, profesores]);
+  }, [curso, profesores, profesorIdInicial]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

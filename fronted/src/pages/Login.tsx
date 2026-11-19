@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GraduationCap, AlertCircle, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Usuario } from '../types';
+import { api } from '../services/api';
 
 interface LoginProps {
   onLoginSuccess: (user: Usuario) => void;
@@ -12,15 +13,17 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  // Mientras el backend valida las credenciales del alumno.
+  const [checking, setChecking] = useState(false);
 
   // Cuentas preconfiguradas con roles para la simulación académica
   const CUENTAS_DEMO = [
     { email: 'admin@edugestor.com', pass: 'admin123', rol: 'admin', nombre: 'Administradora Inés', id: null },
-    { email: 'maria@prof.com', pass: 'prof123', rol: 'profesor', nombre: 'Dra. María González', id: 1 },
-    { email: 'lucas@alumno.com', pass: 'alu123', rol: 'alumno', nombre: 'Lucas Ramírez', id: 2 },
+    { email: 'carlos@prof.com', pass: 'prof123', rol: 'profesor', nombre: 'Carlos Romero', id: 1 },
+    { email: 'luis@alumno.com', pass: 'alu123', rol: 'alumno', nombre: 'Luis Martínez', id: 2 },
   ];
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -29,7 +32,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
       return;
     }
 
-    // Buscar en cuentas demo
+    // 1) Cuentas demo fijas (admin, profesor de ejemplo y alumno de ejemplo).
     const usuarioSimulado = CUENTAS_DEMO.find(
       (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.pass === password
     );
@@ -41,24 +44,19 @@ export function Login({ onLoginSuccess }: LoginProps) {
         nombre: usuarioSimulado.nombre,
         rol: usuarioSimulado.rol as 'admin' | 'profesor' | 'alumno',
       });
-    } else {
-      // Intentar una simulación flexible para que cualquier combinación sirva de prueba si el docente lo requiere
-      if (email.includes('admin') && password === '123') {
-        onLoginSuccess({ id: null, email, nombre: 'Admin Demo', rol: 'admin' });
-      } else if (email.includes('prof') && password === '123') {
-        onLoginSuccess({ id: 1, email, nombre: 'Profesor Demo', rol: 'profesor' });
-      } else if (email.includes('alu') && password === '123') {
-        onLoginSuccess({ id: 1, email, nombre: 'Estudiante Demo', rol: 'alumno' });
-      } else {
-        setError('Credenciales inválidas. Usa una de las cuentas demo de abajo.');
-      }
+      return;
     }
-  };
 
-  const handleFillDemo = (demo: typeof CUENTAS_DEMO[0]) => {
-    setEmail(demo.email);
-    setPassword(demo.pass);
-    setError('');
+    // 2) Alumnos reales: las credenciales que el admin asignó al crearlos.
+    setChecking(true);
+    try {
+      const usuario = await api.login(email.trim(), password);
+      onLoginSuccess(usuario);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Credenciales inválidas.');
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
@@ -147,46 +145,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
           <button
             type="submit"
-            className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3.5 rounded-2xl transition-all transform active:scale-[0.98] mt-2 shadow-lg shadow-violet-600/30 font-display text-sm tracking-wide"
+            disabled={checking}
+            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-2xl transition-all transform active:scale-[0.98] mt-2 shadow-lg shadow-violet-600/30 font-display text-sm tracking-wide"
           >
-            Iniciar Sesión
+            {checking ? 'Verificando…' : 'Iniciar Sesión'}
           </button>
         </form>
-
-        {/* Acceso rápido a Cuentas Demo */}
-        <div className="mt-8 pt-6 border-t border-white/5">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3.5">
-            PROBAR DIFERENTES ROLES (CUENTAS DEMO)
-          </p>
-          <div className="flex flex-col gap-2">
-            {CUENTAS_DEMO.map((demo) => {
-              const roleColors = {
-                admin: 'bg-amber-500/10 hover:bg-amber-500/25 border-amber-500/20 text-amber-300',
-                profesor: 'bg-indigo-500/10 hover:bg-indigo-500/25 border-indigo-500/20 text-indigo-300',
-                alumno: 'bg-emerald-500/10 hover:bg-emerald-500/25 border-emerald-500/20 text-emerald-300'
-              };
-
-              return (
-                <button
-                  key={demo.email}
-                  onClick={() => handleFillDemo(demo)}
-                  className={`
-                    w-full py-2 px-3.5 rounded-xl border text-left text-xs transition-all flex items-center justify-between group
-                    ${roleColors[demo.rol as 'admin'|'profesor'|'alumno']}
-                  `}
-                >
-                  <div className="font-semibold block">
-                    {demo.nombre} 
-                    <span className="text-[9px] opacity-70 font-medium block">{demo.email}</span>
-                  </div>
-                  <span className="text-[10px] uppercase font-mono tracking-wider font-extrabold px-2 py-0.5 roundedbg-black/20">
-                    {demo.rol}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
       </motion.div>
     </div>

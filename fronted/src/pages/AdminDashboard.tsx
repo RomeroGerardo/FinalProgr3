@@ -4,12 +4,13 @@ import {
   GraduationCap, 
   BookOpen, 
   Users, 
-  CheckSquare, 
   Trash2, 
   Mail, 
   Calendar, 
+  KeyRound,
   Search,
-  UserPlus
+  UserPlus,
+  Edit2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Curso, Profesor, Alumno, Inscripcion } from '../types';
@@ -29,10 +30,14 @@ interface AdminDashboardProps {
   onEditarCurso: (id: number, nombre: string, profesor_id: number) => Promise<void>;
   onEliminarCurso: (id: number) => Promise<void>;
   // Operaciones de Profesores
-  onCrearProfesor: (nombre: string, email: string) => Promise<void>;
+  onCrearProfesor: (nombre: string, email: string, password: string) => Promise<boolean>;
+  onEditarProfesor: (id: number, nombre: string, email: string) => Promise<boolean>;
+  onResetearPasswordProfesor: (id: number, password: string) => Promise<boolean>;
+  onEliminarProfesor: (id: number) => Promise<void>;
   // Operaciones de Inscripciones/Alumnos
-  onCrearAlumno: (nombre: string, email: string) => Promise<void>;
-  onInscribir: (alumno_id: number, curso_id: number) => Promise<void>;
+  onCrearAlumno: (nombre: string, email: string, password: string) => Promise<boolean>;
+  onResetearPasswordAlumno: (id: number, password: string) => Promise<boolean>;
+  onEliminarAlumno: (id: number) => Promise<void>;
   onEliminarInscripcion: (id: number) => Promise<void>;
 }
 
@@ -47,32 +52,44 @@ export function AdminDashboard({
   onEditarCurso,
   onEliminarCurso,
   onCrearProfesor,
+  onEditarProfesor,
+  onResetearPasswordProfesor,
+  onEliminarProfesor,
   onCrearAlumno,
-  onInscribir,
+  onResetearPasswordAlumno,
+  onEliminarAlumno,
   onEliminarInscripcion
 }: AdminDashboardProps) {
   
   // Estados de control para Popups/Modales
   const [cursoEditando, setCursoEditando] = useState<Curso | null>(null);
   const [isCursoFormOpen, setIsCursoFormOpen] = useState(false);
+  const [profesorIdInicial, setProfesorIdInicial] = useState<number | null>(null);
   
-  // Agregar Profesor
+  // Agregar / Editar Profesor
   const [isProfesorFormOpen, setIsProfesorFormOpen] = useState(false);
+  const [profesorEditando, setProfesorEditando] = useState<Profesor | null>(null);
   const [profNombre, setProfNombre] = useState('');
   const [profEmail, setProfEmail] = useState('');
+  const [profPassword, setProfPassword] = useState('');
   const [profError, setProfError] = useState('');
 
-  // Agregar Alumno
+  // Blanquear contraseña de un profesor
+  const [profesorPasswordEditando, setProfesorPasswordEditando] = useState<Profesor | null>(null);
+  const [nuevaPasswordProf, setNuevaPasswordProf] = useState('');
+  const [passErrorProf, setPassErrorProf] = useState('');
+
+  // Agregar Alumno (con credenciales)
   const [isAlumnoFormOpen, setIsAlumnoFormOpen] = useState(false);
   const [aluNombre, setAluNombre] = useState('');
   const [aluEmail, setAluEmail] = useState('');
+  const [aluPassword, setAluPassword] = useState('');
   const [aluError, setAluError] = useState('');
 
-  // Nueva Inscripción QuickForm
-  const [isInscripcionFormOpen, setIsInscripcionFormOpen] = useState(false);
-  const [selAlumnoId, setSelAlumnoId] = useState<number>(0);
-  const [selCursoId, setSelCursoId] = useState<number>(0);
-  const [insError, setInsError] = useState('');
+  // Blanquear contraseña de un alumno
+  const [alumnoPasswordEditando, setAlumnoPasswordEditando] = useState<Alumno | null>(null);
+  const [nuevaPassword, setNuevaPassword] = useState('');
+  const [passError, setPassError] = useState('');
 
   // Guardar Curso (Creación / Edición)
   const handleCursoSubmit = async (datos: { nombre: string; profesor_id: number }) => {
@@ -83,9 +100,41 @@ export function AdminDashboard({
     }
     setIsCursoFormOpen(false);
     setCursoEditando(null);
+    setProfesorIdInicial(null);
   };
 
-  // Crear Profesor Submit
+  const abrirNuevoCurso = () => {
+    setCursoEditando(null);
+    setProfesorIdInicial(null);
+    setIsCursoFormOpen(true);
+  };
+
+  // Abre el formulario de curso con este profesor ya seleccionado.
+  const abrirNuevoCursoPara = (profesorId: number) => {
+    setCursoEditando(null);
+    setProfesorIdInicial(profesorId);
+    setIsCursoFormOpen(true);
+  };
+
+  const abrirNuevoProfesor = () => {
+    setProfesorEditando(null);
+    setProfNombre('');
+    setProfEmail('');
+    setProfPassword('');
+    setProfError('');
+    setIsProfesorFormOpen(true);
+  };
+
+  const abrirEdicionProfesor = (prof: Profesor) => {
+    setProfesorEditando(prof);
+    setProfNombre(prof.nombre);
+    setProfEmail(prof.email);
+    setProfPassword('');
+    setProfError('');
+    setIsProfesorFormOpen(true);
+  };
+
+  // Crear / Editar Profesor Submit
   const handleProfesorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfError('');
@@ -100,19 +149,62 @@ export function AdminDashboard({
       return;
     }
 
-    await onCrearProfesor(profNombre.trim(), profEmail.trim());
+    if (!profesorEditando) {
+      if (!profPassword.trim()) {
+        setProfError('La contraseña es obligatoria.');
+        return;
+      }
+      if (profPassword.trim().length < 4) {
+        setProfError('La contraseña debe tener al menos 4 caracteres.');
+        return;
+      }
+    }
+
+    const guardado = profesorEditando
+      ? await onEditarProfesor(profesorEditando.id, profNombre.trim(), profEmail.trim())
+      : await onCrearProfesor(profNombre.trim(), profEmail.trim(), profPassword.trim());
+
+    // Si falló, App ya mostró el toast con el motivo: se deja el modal abierto.
+    if (!guardado) return;
+
     setProfNombre('');
     setProfEmail('');
+    setProfPassword('');
+    setProfesorEditando(null);
     setIsProfesorFormOpen(false);
   };
 
-  // Crear Alumno Submit
+  // Blanquear contraseña de profesor Submit
+  const handlePasswordProfesorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassErrorProf('');
+
+    if (!nuevaPasswordProf.trim()) {
+      setPassErrorProf('Ingresa la nueva contraseña.');
+      return;
+    }
+
+    if (nuevaPasswordProf.trim().length < 4) {
+      setPassErrorProf('La contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+
+    if (!profesorPasswordEditando) return;
+
+    const actualizado = await onResetearPasswordProfesor(profesorPasswordEditando.id, nuevaPasswordProf.trim());
+    if (!actualizado) return;
+
+    setNuevaPasswordProf('');
+    setProfesorPasswordEditando(null);
+  };
+
+  // Crear Alumno Submit (S1: nombre, email y contraseña)
   const handleAlumnoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAluError('');
 
-    if (!aluNombre.trim() || !aluEmail.trim()) {
-      setAluError('Todos los campos son obligatorios.');
+    if (!aluNombre.trim() || !aluEmail.trim() || !aluPassword.trim()) {
+      setAluError('Nombre, email y contraseña son obligatorios.');
       return;
     }
 
@@ -121,36 +213,44 @@ export function AdminDashboard({
       return;
     }
 
-    await onCrearAlumno(aluNombre.trim(), aluEmail.trim());
+    if (aluPassword.trim().length < 4) {
+      setAluError('La contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+
+    const creado = await onCrearAlumno(aluNombre.trim(), aluEmail.trim(), aluPassword.trim());
+
+    // Si falló (por ejemplo email duplicado), App ya mostró el motivo.
+    if (!creado) return;
+
     setAluNombre('');
     setAluEmail('');
+    setAluPassword('');
     setIsAlumnoFormOpen(false);
   };
 
-  // Inscribir Submit
-  const handleInscripcionSubmit = async (e: React.FormEvent) => {
+  // Blanquear contraseña Submit (S2)
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInsError('');
+    setPassError('');
 
-    if (!selAlumnoId || selAlumnoId === 0) {
-      setInsError('Selecciona un alumno.');
+    if (!nuevaPassword.trim()) {
+      setPassError('Ingresa la nueva contraseña.');
       return;
     }
 
-    if (!selCursoId || selCursoId === 0) {
-      setInsError('Selecciona un curso.');
+    if (nuevaPassword.trim().length < 4) {
+      setPassError('La contraseña debe tener al menos 4 caracteres.');
       return;
     }
 
-    // Verificar si ya está inscripto
-    const yaInscripto = inscripciones.some(i => i.alumno_id === selAlumnoId && i.curso_id === selCursoId);
-    if (yaInscripto) {
-      setInsError('El alumno ya está inscripto en este curso.');
-      return;
-    }
+    if (!alumnoPasswordEditando) return;
 
-    await onInscribir(selAlumnoId, selCursoId);
-    setIsInscripcionFormOpen(false);
+    const actualizado = await onResetearPasswordAlumno(alumnoPasswordEditando.id, nuevaPassword.trim());
+    if (!actualizado) return;
+
+    setNuevaPassword('');
+    setAlumnoPasswordEditando(null);
   };
 
   return (
@@ -238,10 +338,7 @@ export function AdminDashboard({
                   <p className="text-xs text-slate-400">Últimos programas formativos añadidos en el catálogo</p>
                 </div>
                 <button
-                  onClick={() => {
-                    setCursoEditando(null);
-                    setIsCursoFormOpen(true);
-                  }}
+                  onClick={abrirNuevoCurso}
                   className="px-3.5 py-1.5 bg-violet-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" />
@@ -281,21 +378,10 @@ export function AdminDashboard({
                   <h4 className="font-display font-medium text-white">Últimas Inscripciones</h4>
                   <p className="text-xs text-slate-400">Nuevos registros estudiantiles</p>
                 </div>
-                <button
-                  onClick={() => {
-                    if (alumnos.length === 0 || cursos.length === 0) {
-                      alert('Registra al menos un alumno y un curso antes de crear una inscripción.');
-                      return;
-                    }
-                    setSelAlumnoId(alumnos[0].id);
-                    setSelCursoId(cursos[0].id);
-                    setIsInscripcionFormOpen(true);
-                  }}
-                  className="p-1 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/20 transition-all flex items-center gap-1"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Matricular</span>
-                </button>
+                {/* S4: los alumnos se inscriben solos desde su panel. */}
+                <span className="text-[10px] text-slate-500 text-right leading-tight max-w-[140px]">
+                  Los alumnos se inscriben desde su propio panel
+                </span>
               </div>
 
               {inscripciones.length === 0 ? (
@@ -327,10 +413,7 @@ export function AdminDashboard({
                 <p className="text-xs text-slate-400">Crear, actualizar, asignar docentes y eliminar cursos del sistema académico</p>
               </div>
               <button
-                onClick={() => {
-                  setCursoEditando(null);
-                  setIsCursoFormOpen(true);
-                }}
+                onClick={abrirNuevoCurso}
                 className="px-4 py-2.5 bg-violet-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-1.5"
               >
                 <Plus className="w-5 h-5" />
@@ -362,7 +445,7 @@ export function AdminDashboard({
                 <p className="text-xs text-slate-400">Gestores de contenido y tutores universitarios</p>
               </div>
               <button
-                onClick={() => setIsProfesorFormOpen(true)}
+                onClick={abrirNuevoProfesor}
                 className="px-4 py-2.5 bg-violet-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-1.5"
               >
                 <UserPlus className="w-5 h-5" />
@@ -377,23 +460,88 @@ export function AdminDashboard({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {profesores.map((prof) => (
-                  <div key={prof.id} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4 text-slate-800">
-                    <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-100/30">
-                      {prof.nombre.charAt(0).toUpperCase()}
+                {profesores.map((prof) => {
+                  const materias = cursos.filter((c) => c.profesor_id === prof.id);
+                  return (
+                    <div
+                      key={prof.id}
+                      className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col text-slate-800 overflow-hidden"
+                    >
+                      <div className="p-5 flex items-start gap-4">
+                        <div className="w-12 h-12 shrink-0 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-100/30">
+                          {prof.nombre.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="overflow-hidden flex-1">
+                          <h4 className="font-semibold text-slate-900 truncate">{prof.nombre}</h4>
+                          <p className="text-xs text-slate-500 truncate flex items-center gap-1">
+                            <Mail className="w-3 h-3 text-violet-500 shrink-0" />
+                            <span>{prof.email}</span>
+                          </p>
+                          <span className="inline-block mt-1.5 text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                            Docente ID: {prof.id}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => {
+                              setProfesorPasswordEditando(prof);
+                              setNuevaPasswordProf('');
+                              setPassErrorProf('');
+                            }}
+                            className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
+                            title="Blanquear contraseña"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => abrirEdicionProfesor(prof)}
+                            className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                            title="Editar profesor"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onEliminarProfesor(prof.id)}
+                            className="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors"
+                            title="Eliminar profesor"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="px-5 pb-5 mt-auto">
+                        <div className="pt-3 border-t border-slate-100">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                            Materias asignadas ({materias.length})
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {materias.length === 0 ? (
+                              <span className="text-xs text-slate-400 italic">Sin materias asignadas</span>
+                            ) : (
+                              materias.map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="text-[10px] font-semibold bg-violet-50 text-violet-700 border border-violet-100 px-2 py-1 rounded-lg"
+                                >
+                                  {c.nombre}
+                                </span>
+                              ))
+                            )}
+                            <button
+                              onClick={() => abrirNuevoCursoPara(prof.id)}
+                              className="text-[10px] font-bold text-violet-600 hover:text-violet-800 border border-dashed border-violet-300 hover:border-violet-500 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                              title="Crea un curso y lo asigna a este profesor"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Asignar materia
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="overflow-hidden flex-1">
-                      <h4 className="font-semibold text-slate-900 truncate">{prof.nombre}</h4>
-                      <p className="text-xs text-slate-500 truncate flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-violet-500" />
-                        <span>{prof.email}</span>
-                      </p>
-                      <span className="inline-block mt-1.5 text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                        Docente ID: {prof.id}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -438,6 +586,27 @@ export function AdminDashboard({
                         Estudiante ID: {a.id}
                       </span>
                     </div>
+                    {/* S2 / S3: blanquear contraseña o eliminar al alumno. */}
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          setAlumnoPasswordEditando(a);
+                          setNuevaPassword('');
+                          setPassError('');
+                        }}
+                        className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
+                        title="Blanquear contraseña"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onEliminarAlumno(a.id)}
+                        className="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors"
+                        title="Eliminar alumno"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -453,21 +622,10 @@ export function AdminDashboard({
                 <h3 className="text-xl font-bold font-display text-white">Inscripciones y Matriculaciones</h3>
                 <p className="text-xs text-slate-400">Lista completa de vinculación entre alumnos y su catálogo académico</p>
               </div>
-              <button
-                onClick={() => {
-                  if (alumnos.length === 0 || cursos.length === 0) {
-                    alert('Registra al menos un alumno y un curso antes de crear una inscripción.');
-                    return;
-                  }
-                  setSelAlumnoId(alumnos[0].id);
-                  setSelCursoId(cursos[0].id);
-                  setIsInscripcionFormOpen(true);
-                }}
-                className="px-4 py-2.5 bg-violet-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-1.5"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Matricular Alumno</span>
-              </button>
+              {/* S4: la matriculación manual del admin ya no existe. */}
+              <span className="text-[11px] text-slate-500 text-right leading-tight max-w-[200px]">
+                Cada alumno se inscribe desde su panel con sus credenciales
+              </span>
             </div>
 
             {inscripciones.length === 0 ? (
@@ -522,8 +680,18 @@ export function AdminDashboard({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white text-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-100">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-display font-bold text-lg text-slate-930">Asistente — Añadir Profesor</h3>
-              <button onClick={() => setIsProfesorFormOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-5 h-5 rotate-45" /></button>
+              <h3 className="font-display font-bold text-lg text-slate-930">
+                {profesorEditando ? 'Editar Profesor' : 'Asistente — Añadir Profesor'}
+              </h3>
+              <button
+                onClick={() => {
+                  setIsProfesorFormOpen(false);
+                  setProfesorEditando(null);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
             </div>
             <form onSubmit={handleProfesorSubmit} className="p-6 space-y-4">
               {profError && <div className="p-3 bg-rose-100 text-rose-600 rounded-xl text-xs font-medium">{profError}</div>}
@@ -549,9 +717,36 @@ export function AdminDashboard({
                   required
                 />
               </div>
+              {!profesorEditando && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contraseña inicial</label>
+                  <input
+                    type="text"
+                    value={profPassword}
+                    onChange={(e) => setProfPassword(e.target.value)}
+                    placeholder="mínimo 4 caracteres"
+                    className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none"
+                    required
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    El docente usa este correo y contraseña para entrar. Se las tenés que pasar vos.
+                  </p>
+                </div>
+              )}
               <div className="pt-4 border-t flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setIsProfesorFormOpen(false)} className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold">Cancelar</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-bold shadow-md hover:bg-indigo-700">Registrar Docente</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfesorFormOpen(false);
+                    setProfesorEditando(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-bold shadow-md hover:bg-indigo-700">
+                  {profesorEditando ? 'Guardar Cambios' : 'Registrar Docente'}
+                </button>
               </div>
             </form>
           </div>
@@ -564,7 +759,16 @@ export function AdminDashboard({
           <div className="bg-white text-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-100">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-display font-bold text-lg text-slate-930">Asistente — Registrar Estudiante</h3>
-              <button onClick={() => setIsAlumnoFormOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-5 h-5 rotate-45" /></button>
+              <button
+                onClick={() => {
+                  setIsAlumnoFormOpen(false);
+                  setAluPassword('');
+                  setAluError('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
             </div>
             <form onSubmit={handleAlumnoSubmit} className="p-6 space-y-4">
               {aluError && <div className="p-3 bg-rose-100 text-rose-600 rounded-xl text-xs font-medium">{aluError}</div>}
@@ -590,8 +794,32 @@ export function AdminDashboard({
                   required
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contraseña inicial</label>
+                <input
+                  type="text"
+                  value={aluPassword}
+                  onChange={(e) => setAluPassword(e.target.value)}
+                  placeholder="mínimo 4 caracteres"
+                  className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none"
+                  required
+                />
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  El alumno usa este correo y contraseña para entrar. Se las tenés que pasar vos.
+                </p>
+              </div>
               <div className="pt-4 border-t flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setIsAlumnoFormOpen(false)} className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold">Cancelar</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAlumnoFormOpen(false);
+                    setAluPassword('');
+                    setAluError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold"
+                >
+                  Cancelar
+                </button>
                 <button type="submit" className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold shadow-md hover:bg-emerald-700">Registrar Alumno</button>
               </div>
             </form>
@@ -599,39 +827,112 @@ export function AdminDashboard({
         </div>
       )}
 
-      {/* ═ MODAL: NUEVA INSCRIPCIÓN / MATRICULA ═ */}
-      {isInscripcionFormOpen && (
+      {/* ═ MODAL: BLANQUEAR CONTRASEÑA (S2) ═ */}
+      {alumnoPasswordEditando && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white text-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-100">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-display font-bold text-lg text-slate-930">Asistente — Nueva Inscripción (Matrícula)</h3>
-              <button onClick={() => setIsInscripcionFormOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-5 h-5 rotate-45" /></button>
+              <h3 className="font-display font-bold text-lg text-slate-930">Blanquear contraseña</h3>
+              <button
+                onClick={() => {
+                  setAlumnoPasswordEditando(null);
+                  setNuevaPassword('');
+                  setPassError('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
             </div>
-            <form onSubmit={handleInscripcionSubmit} className="p-6 space-y-4">
-              {insError && <div className="p-3 bg-rose-100 text-rose-600 rounded-xl text-xs font-medium">{insError}</div>}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Alumno</label>
-                <select
-                  value={selAlumnoId}
-                  onChange={(e) => setSelAlumnoId(Number(e.target.value))}
-                  className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm"
-                >
-                  {alumnos.map(a => <option key={a.id} value={a.id}>{a.nombre} ({a.email})</option>)}
-                </select>
+            <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
+              {passError && <div className="p-3 bg-rose-100 text-rose-600 rounded-xl text-xs font-medium">{passError}</div>}
+              <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-600">
+                Alumno: <span className="font-semibold text-slate-800">{alumnoPasswordEditando.nombre}</span>
+                <br />
+                {alumnoPasswordEditando.email}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Curso</label>
-                <select
-                  value={selCursoId}
-                  onChange={(e) => setSelCursoId(Number(e.target.value))}
-                  className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm"
-                >
-                  {cursos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nueva contraseña</label>
+                <input
+                  type="text"
+                  value={nuevaPassword}
+                  onChange={(e) => setNuevaPassword(e.target.value)}
+                  placeholder="mínimo 4 caracteres"
+                  className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none"
+                  required
+                />
               </div>
               <div className="pt-4 border-t flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setIsInscripcionFormOpen(false)} className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold">Cancelar</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-bold shadow-md hover:bg-indigo-700">Asignar Matrícula</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAlumnoPasswordEditando(null);
+                    setNuevaPassword('');
+                    setPassError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-amber-600 text-white text-sm font-bold shadow-md hover:bg-amber-700">
+                  Actualizar contraseña
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═ MODAL: BLANQUEAR CONTRASEÑA PROFESOR ═ */}
+      {profesorPasswordEditando && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white text-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl border border-slate-100">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-display font-bold text-lg text-slate-930">Blanquear contraseña docente</h3>
+              <button
+                onClick={() => {
+                  setProfesorPasswordEditando(null);
+                  setNuevaPasswordProf('');
+                  setPassErrorProf('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handlePasswordProfesorSubmit} className="p-6 space-y-4">
+              {passErrorProf && <div className="p-3 bg-rose-100 text-rose-600 rounded-xl text-xs font-medium">{passErrorProf}</div>}
+              <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-600">
+                Profesor: <span className="font-semibold text-slate-800">{profesorPasswordEditando.nombre}</span>
+                <br />
+                {profesorPasswordEditando.email}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nueva contraseña</label>
+                <input
+                  type="text"
+                  value={nuevaPasswordProf}
+                  onChange={(e) => setNuevaPasswordProf(e.target.value)}
+                  placeholder="mínimo 4 caracteres"
+                  className="w-full bg-[#fafafd] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none"
+                  required
+                />
+              </div>
+              <div className="pt-4 border-t flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfesorPasswordEditando(null);
+                    setNuevaPasswordProf('');
+                    setPassErrorProf('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-500 border border-slate-200 text-sm font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-amber-600 text-white text-sm font-bold shadow-md hover:bg-amber-700">
+                  Actualizar contraseña
+                </button>
               </div>
             </form>
           </div>
@@ -643,10 +944,12 @@ export function AdminDashboard({
         <CursoForm
           curso={cursoEditando}
           profesores={profesores}
+          profesorIdInicial={profesorIdInicial}
           onSubmit={handleCursoSubmit}
           onCancel={() => {
             setIsCursoFormOpen(false);
             setCursoEditando(null);
+            setProfesorIdInicial(null);
           }}
         />
       )}

@@ -88,10 +88,9 @@ export default function App() {
   
   const handleCrearCurso = async (nombre: string, profesor_id: number) => {
     try {
-      const nuevoCurso = await api.crearCurso({ nombre, profesor_id });
-      // Insertar en estado local React
-      const profNombre = profesores.find(p => p.id === profesor_id)?.nombre || 'Sin asignar';
-      setCursos((prev) => [...prev, { ...nuevoCurso, profesor: profNombre }]);
+      await api.crearCurso({ nombre, profesor_id });
+      // Resincronizar el estado con la base de datos real
+      await loadAllData();
       showToast(`Curso "${nombre}" creado con éxito.`);
     } catch (error) {
        showToast("Error al dar de alta el curso.", "error");
@@ -100,10 +99,9 @@ export default function App() {
 
   const handleEditarCurso = async (id: number, nombre: string, profesor_id: number) => {
     try {
-      const cursoEditado = await api.editarCurso(id, { nombre, profesor_id });
-      const profNombre = profesores.find(p => p.id === profesor_id)?.nombre || 'Sin asignar';
-      
-      setCursos((prev) => prev.map(c => c.id === id ? { ...cursoEditado, profesor: profNombre } : c));
+      await api.editarCurso(id, { nombre, profesor_id });
+      // Resincronizar el estado con la base de datos real
+      await loadAllData();
       showToast("Información del curso actualizada.");
     } catch (error) {
       showToast("Fallo al actualizar el curso.", "error");
@@ -114,9 +112,8 @@ export default function App() {
     if (window.confirm("¿Seguro que deseas eliminar este curso de la plataforma? Esta acción desvinculará las inscripciones asociadas.")) {
       try {
         await api.eliminarCurso(id);
-        setCursos((prev) => prev.filter(c => c.id !== id));
-        // Desvincular inscripciones locales del curso eliminado
-        setInscripciones((prev) => prev.filter(i => i.curso_id !== id));
+        // El backend borra en cascada las inscripciones: resincronizamos todo
+        await loadAllData();
         showToast("Curso eliminado correctamente.");
       } catch (error) {
         showToast("Error al intentar realizar la baja.", "error");
@@ -126,33 +123,103 @@ export default function App() {
 
   // ══════════════ OPERACIONES PROFESORES ══════════════
   
-  const handleCrearProfesor = async (nombre: string, email: string) => {
+  const handleCrearProfesor = async (nombre: string, email: string, password: string): Promise<boolean> => {
     try {
-      const nuevoProf = await api.crearProfesor({ nombre, email });
-      setProfesores((prev) => [...prev, nuevoProf]);
-      showToast(`Profesor "${nombre}" registrado correctamente.`);
+      await api.crearProfesor({ nombre, email, password });
+      await loadAllData();
+      showToast(`Profesor creado. Credenciales: ${email} / ${password}`);
+      return true;
     } catch (err) {
-      showToast("Fallo al registrar profesor.", "error");
+      showToast(err instanceof Error ? err.message : "Fallo al registrar profesor.", "error");
+      return false;
+    }
+  };
+
+  const handleResetearPasswordProfesor = async (id: number, password: string): Promise<boolean> => {
+    try {
+      await api.resetearPasswordProfesor(id, password);
+      showToast(`Contraseña de profesor actualizada: ${password}`);
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Fallo al actualizar la contraseña.", "error");
+      return false;
+    }
+  };
+
+  const handleEditarProfesor = async (id: number, nombre: string, email: string): Promise<boolean> => {
+    try {
+      await api.editarProfesor(id, { nombre, email });
+      await loadAllData();
+      showToast("Datos del profesor actualizados.");
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Fallo al actualizar el profesor.", "error");
+      return false;
+    }
+  };
+
+  const handleEliminarProfesor = async (id: number) => {
+    if (window.confirm("¿Seguro que quieres eliminar este profesor? Primero tenés que reasignar sus materias.")) {
+      try {
+        await api.eliminarProfesor(id);
+        await loadAllData();
+        showToast("Profesor eliminado correctamente.");
+      } catch (err) {
+        // El backend responde 409 con el motivo exacto si todavía tiene materias.
+        showToast(err instanceof Error ? err.message : "Error al eliminar el profesor.", "error");
+      }
     }
   };
 
   // ══════════════ OPERACIONES ALUMNOS E INSCRIPCIONES ══════════════
 
-  const handleCrearAlumno = async (nombre: string, email: string) => {
+  // S1: el admin crea el alumno con su contraseña y se las entrega.
+  const handleCrearAlumno = async (nombre: string, email: string, password: string): Promise<boolean> => {
     try {
-      const nuevoAlu = await api.crearAlumno({ nombre, email });
-      setAlumnos((prev) => [...prev, nuevoAlu]);
-      showToast(`Estudiante "${nombre}" registrado.`);
+      await api.crearAlumno({ nombre, email, password });
+      await loadAllData();
+      showToast(`Alumno creado. Credenciales: ${email} / ${password}`);
+      return true;
     } catch (err) {
-      showToast("Fallo al registrar alumno.", "error");
+      showToast(err instanceof Error ? err.message : "Fallo al registrar alumno.", "error");
+      return false;
+    }
+  };
+
+  // S2: blanquear la contraseña de un alumno que la olvidó.
+  const handleResetearPasswordAlumno = async (id: number, password: string): Promise<boolean> => {
+    try {
+      await api.resetearPasswordAlumno(id, password);
+      showToast(`Contraseña actualizada: ${password}`);
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Fallo al actualizar la contraseña.", "error");
+      return false;
+    }
+  };
+
+  // S3: eliminar alumno (sus inscripciones se dan de baja en cascada).
+  const handleEliminarAlumno = async (id: number) => {
+    if (!window.confirm("¿Eliminar este alumno? También se dan de baja todas sus inscripciones.")) return;
+    try {
+      const resultado = await api.eliminarAlumno(id);
+      await loadAllData();
+      const bajas = resultado.inscripcionesEliminadas ?? 0;
+      showToast(
+        bajas > 0
+          ? `Alumno eliminado. Se dieron de baja ${bajas} inscripción(es).`
+          : "Alumno eliminado correctamente."
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error al eliminar el alumno.", "error");
     }
   };
 
   const handleInscribirAlumno = async (alumno_id: number, curso_id: number) => {
     try {
-      const nuevaInscr = await api.inscribirAlumno({ alumno_id, curso_id });
-      setInscripciones((prev) => [...prev, nuevaInscr]);
-      
+      await api.inscribirAlumno({ alumno_id, curso_id });
+      await loadAllData();
+
       const cursoNombre = cursos.find(c => c.id === curso_id)?.nombre || 'Curso';
       showToast(`Inscripción exitosa en: ${cursoNombre}`, "success");
     } catch (err) {
@@ -164,7 +231,7 @@ export default function App() {
     if (window.confirm("¿Deseas dar de baja esta asignación de matrícula de forma permanente?")) {
       try {
         await api.eliminarInscripcion(id);
-        setInscripciones((prev) => prev.filter(i => i.id !== id));
+        await loadAllData();
         showToast("Matrícula dada de baja con éxito.");
       } catch (err) {
         showToast("Error al dar de baja la matrícula.", "error");
@@ -191,8 +258,12 @@ export default function App() {
             onEditarCurso={handleEditarCurso}
             onEliminarCurso={handleEliminarCurso}
             onCrearProfesor={handleCrearProfesor}
+            onEditarProfesor={handleEditarProfesor}
+            onResetearPasswordProfesor={handleResetearPasswordProfesor}
+            onEliminarProfesor={handleEliminarProfesor}
             onCrearAlumno={handleCrearAlumno}
-            onInscribir={handleInscribirAlumno}
+            onResetearPasswordAlumno={handleResetearPasswordAlumno}
+            onEliminarAlumno={handleEliminarAlumno}
             onEliminarInscripcion={handleEliminarInscripcion}
           />
         );
@@ -203,11 +274,9 @@ export default function App() {
             user={user}
             cursos={cursos}
             profesores={profesores}
+            alumnos={alumnos}
             inscripciones={inscripciones}
             currentTab={currentTab}
-            onCrearCurso={handleCrearCurso}
-            onEditarCurso={handleEditarCurso}
-            onEliminarCurso={handleEliminarCurso}
           />
         );
 
@@ -254,6 +323,7 @@ export default function App() {
 
     if (user.rol === 'alumno') {
       if (currentTab === 'mis-cursos') return 'Mis Clases Matriculadas';
+      if (currentTab === 'clase-en-vivo') return 'Sala de Clase en Vivo';
       if (currentTab === 'explorar') return 'Catálogo de Ofertas Disponibles';
       return 'Campus Virtual Estudiantil';
     }

@@ -9,7 +9,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ titulo, onOpenSidebar, onRefreshData }: NavbarProps) {
-  const [backendConectado, setBackendConectado] = useState(false);
+  // null = todavía no hubo ningún request real; true/false = resultado del último.
+  const [backendConectado, setBackendConectado] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
 
   const checkConnection = () => {
@@ -19,7 +20,7 @@ export function Navbar({ titulo, onOpenSidebar, onRefreshData }: NavbarProps) {
 
   useEffect(() => {
     checkConnection();
-    const interval = setInterval(checkConnection, 5000); // Check each 5 seconds
+    const interval = setInterval(checkConnection, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -72,21 +73,32 @@ export function Navbar({ titulo, onOpenSidebar, onRefreshData }: NavbarProps) {
         {/* Indicador de Conexión */}
         <div className={`
           flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold select-none transition-all
-          ${backendConectado 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+          ${backendConectado === true
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+            : backendConectado === false
+              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              : 'bg-slate-500/10 border-slate-500/20 text-slate-300'
           }
         `}>
-          <div className={`w-2 h-2 rounded-full ${backendConectado ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-          {backendConectado ? (
+          <div className={`w-2 h-2 rounded-full ${
+            backendConectado === true ? 'bg-emerald-400 animate-pulse'
+            : backendConectado === false ? 'bg-amber-400'
+            : 'bg-slate-400 animate-pulse'
+          }`} />
+          {backendConectado === null ? (
             <span className="flex items-center gap-1">
               <Database className="w-3 w-3 inline" />
-              <span>Gerardo's MySQL API</span>
+              <span>Conectando…</span>
+            </span>
+          ) : backendConectado ? (
+            <span className="flex items-center gap-1">
+              <Database className="w-3 w-3 inline" />
+              <span>Base de datos conectada</span>
             </span>
           ) : (
-            <span className="flex items-center gap-1" title="El servidor backend en puerto 3000 no responde. Usando simulación LocalStorage.">
+            <span className="flex items-center gap-1" title="El backend en http://localhost:3000 no responde. Verificá que el servidor y MySQL estén levantados.">
               <AlertCircle className="w-3.5 h-3.5 inline text-amber-400" />
-              <span>Simulado Local</span>
+              <span>Backend caído</span>
             </span>
           )}
         </div>

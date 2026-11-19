@@ -9,7 +9,8 @@ import {
   FileText,
   Compass,
   Briefcase,
-  X
+  X,
+  Radio
 } from 'lucide-react';
 import { Usuario } from '../types';
 
@@ -39,6 +40,7 @@ export function Sidebar({ user, currentTab, setCurrentTab, onLogout, isOpen, onC
     ],
     alumno: [
       { id: 'mis-cursos', label: 'Mis Cursos', icon: GraduationCap },
+      { id: 'clase-en-vivo', label: 'Clase en Vivo', icon: Radio },
       { id: 'explorar', label: 'Explorar Cursos', icon: Compass },
     ]
   };
